@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ChamanGPT V2.0.0</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #7566a6 0%, #5c4d8c 100%);
+      color: #fff;
+      transition: background 1s ease, color 0.5s ease;
+    }
+    body.dark {
+      background: linear-gradient(135deg, #1f192f 0%, #3d335e 100%);
+      color: #fff;
+    }
+    .ai-container {
+      width: 100%;
+      max-width: 900px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: 0.5s ease;
+    }
+    .header {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 { font-size: 1.8rem; display: flex; align-items: center; gap: 10px; }
+    .logo { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
+    .subtitle { font-size: 0.9rem; color: #ddd; }
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      animation: fadeIn .25s ease;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+    .user-message {
+      background: #2596be;
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 6px;
+    }
+    .ai-message {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+      align-self: flex-start;
+      border-bottom-left-radius: 6px;
+    }
+    .input-container {
+      display: flex;
+      padding: 16px;
+      gap: 10px;
+      background: #8577b0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      transition: background 1s ease;
+    }
+    body.dark .input-container { background: #3d335e; }
+    .message-input {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 25px;
+      border: none;
+      outline: none;
+      background: #66559c;
+      color: #fff;
+      font-size: 1rem;
+      transition: background 1s ease;
+    }
+    body.dark .message-input { background: #1f192f; }
+    .message-input::placeholder { color: rgba(255, 255, 255, 0.7); }
+    .send-button {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      background: none;
+      cursor: pointer;
+      padding: 0;
+      overflow: hidden;
+    }
+    .send-button img { width: 100%; height: 100%; object-fit: cover; }
+    .typing-indicator {
+      display: none;
+      color: #ddd;
+      padding: 10px 20px;
+      font-style: italic;
+      font-size: 0.9rem;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .switchers { display: flex; gap: 10px; }
+    button {
+      cursor: pointer;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: bold;
+      transition: 0.3s;
+    }
+    .theme-btn { background: #ffcc00; color: #000; }
+    .theme-btn:hover { background: #e6b800; }
+  </style>
+</head>
+<body class="light">
+  <div class="ai-container">
+    <div class="header">
+      <div>
+        <h1><img src="grass.jpg" alt="logo" class="logo"> ChamanGPT V2.0.0</h1>
+        <p class="subtitle" id="subtitle">AI Assistant - Multilingual</p>
+      </div>
+      <div class="switchers">
+        <button class="theme-btn" id="themeBtn">🌙 Dark</button>
+      </div>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+      <div class="message ai-message">Hello! I'm ChamanGPT 🌿 I can chat in English, فارسی, or Deutsch!</div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator">AI is thinking...</div>
+
+    <div class="input-container">
+      <input id="messageInput" class="message-input" placeholder="Type your message..." autocomplete="off" />
+      <button class="send-button" id="sendBtn">
+        <img src="send-icon.png" alt="Send" />
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const chatContainer = document.getElementById("chatContainer");
+    const messageInput = document.getElementById("messageInput");
+    const typingIndicator = document.getElementById("typingIndicator");
+    const sendBtn = document.getElementById("sendBtn");
+    const themeBtn = document.getElementById("themeBtn");
+
+    let theme = "light";
+
+    // Use a public Hugging Face model (no API key needed)
+    const API_URL = "https://api-inference.huggingface.co/models/google/gemma-2b-it";
+
+    // Detect simple language (English, Persian, German)
+    function detectLanguage(text) {
+      const persianPattern = /[\u0600-\u06FF]/;
+      const germanPattern = /[äöüß]/i;
+      if (persianPattern.test(text)) return "fa";
+      if (germanPattern.test(text)) return "de";
+      return "en";
+    }
+
+    // Add message to chat
+    function addMessage(sender, text) {
+      const msg = document.createElement("div");
+      msg.className = "message " + (sender === "user" ? "user-message" : "ai-message");
+      msg.textContent = text;
+      chatContainer.appendChild(msg);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Fetch AI response (no key)
+    async function fetchGPTResponse(query, lang) {
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inputs: query })
+        });
+
+        const data = await response.json();
+        console.log("API Response:", data);
+
+        let text = "I’m not sure what to say...";
+        if (Array.isArray(data) && data[0]?.generated_text) {
+          text = data[0].generated_text.replace(query, "").trim();
+        }
+
+        if (lang === "fa") text = text.replace(/ChamanGPT/g, "چمن‌جی‌پی‌تی");
+        if (lang === "de") text = text.replace(/ChamanGPT/g, "ChamanGPT (Deutsch)");
+
+        addMessage("ai", text);
+      } catch (err) {
+        console.error(err);
+        addMessage("ai", "⚠️ There was an error contacting the AI server.");
+      }
+    }
+
+    // Send button
+    sendBtn.addEventListener("click", () => {
+      const userInput = messageInput.value.trim();
+      if (userInput !== "") {
+        addMessage("user", userInput);
+        messageInput.value = "";
+        const lang = detectLanguage(userInput);
+        typingIndicator.style.display = "block";
+
+        setTimeout(() => {
+          typingIndicator.style.display = "none";
+          fetchGPTResponse(userInput, lang);
+        }, 800);
+      }
+    });
+
+    // Enter key send
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendBtn.click();
+    });
+
+    // Theme switch
+    themeBtn.addEventListener("click", () => {
+      if (theme === "light") {
+        document.body.classList.add("dark");
+        document.body.classList.remove("light");
+        themeBtn.textContent = "🌙 Light";
+        theme = "dark";
+      } else {
+        document.body.classList.add("light");
+        document.body.classList.remove("dark");
+        themeBtn.textContent = "🌚 Dark";
+        theme = "light";
+      }
+    });
+  </script>
+</body>
+</html>
